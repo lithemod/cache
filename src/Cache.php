@@ -15,7 +15,7 @@ class Cache
      *
      * @var string
      */
-    private static $cacheDir = __DIR__ . '/../';
+    private static $cacheDir = null;
 
     /**
      * A map of supported serializer names to their corresponding PHP functions.
@@ -46,6 +46,8 @@ class Cache
      */
     private static function ensureCacheDirExists()
     {
+        self::$cacheDir = self::$cacheDir?: dirname(__DIR__, 4) . '/storage/framework/cache';
+
         if (!is_dir(self::$cacheDir)) {
             if (!mkdir(self::$cacheDir, 0777, true) && !is_dir(self::$cacheDir)) {
                 throw new RuntimeException("Failed to create cache directory: " . self::$cacheDir);
