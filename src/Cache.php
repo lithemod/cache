@@ -181,19 +181,22 @@ class Cache
      *
      * @param string $key The key for the cached data.
      * @param callable $callback The callback to compute the data if not found in cache.
-     * @param int $expiration The expiration time in seconds (default is 3600).
+     * @param int $ttl The expiration time in seconds (default is 3600).
      * @param string $serializer The serializer to use (default is 'serialize').
      * @return mixed The cached or computed data.
      */
-    public static function remember($key, $callback, $expiration = 3600, $serializer = 'serialize')
+    public static function remember($key, $callback, $ttl = 3600, $serializer = 'serialize')
     {
-        $cachedData = self::get($key);
+        $cachedData = self::get($key); // Attempts to retrieve data from the cache
 
-        if (!$cachedData) {
-            $cachedData = $callback();
-            self::add($key, $cachedData, $expiration, $serializer);
+        if ($cachedData !== null) {
+            return $cachedData; // Returns cached data if it exists
         }
 
-        return $cachedData;
+        // If there is no cached data, execute the callback to get new data
+        $data = $callback();
+        self::add($key, $data, $ttl, $serializer); // Adds the data to the cache
+
+        return $data; // Returns the new data
     }
 }
