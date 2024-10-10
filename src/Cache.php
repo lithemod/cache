@@ -21,7 +21,6 @@ class Cache
     private static $serializerMap = [
         'serialize' => ['serialize', 'unserialize'],
         'json' => ['json_encode', 'json_decode'],
-        'yaml' => ['yaml_emit', 'yaml_parse'], // Assuming YAML serialization is available
     ];
 
     /**
