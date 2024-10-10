@@ -11,16 +11,12 @@ use RuntimeException;
 class Cache
 {
     /**
-     * The directory where cached data will be stored.
-     *
-     * @var string
+     * @var string|null Cache directory path
      */
     private static $cacheDir = null;
 
     /**
-     * A map of supported serializer names to their corresponding PHP functions.
-     *
-     * @var array
+     * @var array Map of supported serialization formats and their functions
      */
     private static $serializerMap = [
         'serialize' => ['serialize', 'unserialize'],
@@ -29,9 +25,10 @@ class Cache
     ];
 
     /**
-     * Initializes the cache directory.
+     * Set the cache directory.
      *
-     * @param string $dir The directory where cached data will be stored.
+     * @param string $dir The directory path to use for cache files.
+     * @return void
      */
     public static function dir($dir)
     {
@@ -40,204 +37,195 @@ class Cache
     }
 
     /**
-     * Ensures the cache directory exists. If it does not, it attempts to create it.
+     * Ensure the cache directory exists and is writable.
      *
-     * @throws RuntimeException If the directory cannot be created.
+     * @throws RuntimeException If the cache directory cannot be created or is not writable.
+     * @return void
      */
     private static function ensureCacheDirExists()
     {
-        // Set a default directory if none is provided.
         self::$cacheDir = self::$cacheDir ?: dirname(__DIR__, 4) . '/storage/framework/cache';
 
-        // Check if the directory exists; if not, create it.
         if (!is_dir(self::$cacheDir)) {
             if (!mkdir(self::$cacheDir, 0777, true) && !is_dir(self::$cacheDir)) {
                 throw new RuntimeException("Failed to create cache directory: " . self::$cacheDir);
             }
         }
+
+        // Check if the directory is writable
+        if (!is_writable(self::$cacheDir)) {
+            throw new RuntimeException("Cache directory is not writable: " . self::$cacheDir);
+        }
     }
 
     /**
-     * Generates the filename for a cached item based on its key.
+     * Get the cache file path for the given key.
      *
-     * @param string $key The key of the cached item.
-     *
-     * @return string The filename for the cached item.
+     * @param string $key The cache key.
+     * @return string The path to the cache file.
      */
     private static function getCacheFile($key)
     {
-        // Return the full path of the cache file using an MD5 hash of the key.
         return self::$cacheDir . DIRECTORY_SEPARATOR . md5($key) . '.cache';
     }
 
     /**
-     * Stores data in the cache with an optional expiration time and serializer.
+     * Add a new cache entry.
      *
-     * @param string $key The key to identify the cached data.
-     * @param mixed $data The data to be cached.
-     * @param int $expiration (optional) The number of seconds the data should remain cached. Defaults to 3600 (1 hour).
-     * @param string $serializer (optional) The serializer to use for storing the data. Defaults to 'serialize'.
-     *
-     * @throws RuntimeException If writing the data to the cache file fails.
-     * @throws InvalidArgumentException If the provided serializer is not supported.
+     * @param string $key The cache key.
+     * @param mixed $data The data to store.
+     * @param int $expiration The cache expiration time in seconds.
+     * @param string $serializer The serialization format to use.
+     * @throws RuntimeException If writing to the cache file fails.
+     * @return void
      */
     public static function add($key, $data, $expiration = 3600, $serializer = 'serialize')
     {
-        // Ensure the cache directory exists.
         self::ensureCacheDirExists();
 
-        // Generate the cache file path.
         $cacheFile = self::getCacheFile($key);
 
-        // Prepare the cache data to include expiration, serialized data, and the serializer used.
         $cacheData = [
             'expiration' => time() + $expiration,
             'data' => self::serializeData($data, $serializer),
             'serializer' => $serializer,
         ];
 
-        // Write the cache data to a file using a lock to prevent concurrent writes.
-        if (file_put_contents($cacheFile, json_encode($cacheData), LOCK_EX) === false) {
+        // Use error suppression with '@' and check the result.
+        $bytesWritten = @file_put_contents($cacheFile, json_encode($cacheData), LOCK_EX);
+        if ($bytesWritten === false) {
             throw new RuntimeException("Failed to write cache data to file: $cacheFile");
+        }
+
+        // Double-check file existence and readability after writing
+        if (!file_exists($cacheFile) || !is_readable($cacheFile)) {
+            throw new RuntimeException("Cache file is not accessible after writing: $cacheFile");
         }
     }
 
     /**
-     * Serializes data using the specified serializer.
+     * Serialize data using the specified format.
      *
-     * @param mixed $data The data to be serialized.
-     * @param string $serializer The name of the serializer to use.
-     *
-     * @throws InvalidArgumentException If the provided serializer is not supported.
-     *
+     * @param mixed $data The data to serialize.
+     * @param string $serializer The serialization format to use.
+     * @throws InvalidArgumentException If an invalid serializer is provided.
      * @return string The serialized data.
      */
     private static function serializeData($data, $serializer)
     {
-        // Ensure the serializer is supported.
         if (!isset(self::$serializerMap[$serializer])) {
             throw new InvalidArgumentException("Invalid serializer: $serializer");
         }
 
-        // Call the appropriate function to serialize the data.
         $serializerFunction = self::$serializerMap[$serializer][0];
         return call_user_func($serializerFunction, $data);
     }
 
     /**
-     * Deserializes data using the specified serializer.
+     * Unserialize data using the specified format.
      *
      * @param string $serializedData The serialized data.
-     * @param string $serializer The name of the serializer used for serialization.
-     *
-     * @throws InvalidArgumentException If the provided serializer is not supported.
-     *
-     * @return mixed The deserialized data.
+     * @param string $serializer The serialization format to use.
+     * @throws InvalidArgumentException If an invalid serializer is provided.
+     * @return mixed The unserialized data.
      */
     private static function unserializeData($serializedData, $serializer)
     {
-        // Ensure the serializer is supported.
         if (!isset(self::$serializerMap[$serializer])) {
             throw new InvalidArgumentException("Invalid serializer: $serializer");
         }
 
-        // Call the appropriate function to deserialize the data.
         $unserializerFunction = self::$serializerMap[$serializer][1];
 
-        // Special case for JSON: ensure the output is an associative array.
         if ($serializer === 'json') {
-            return call_user_func($unserializerFunction, $serializedData, true); // true for associative array
+            return call_user_func($unserializerFunction, $serializedData, true);
         }
 
-        // For 'serialize' and 'yaml', no additional parameters are needed.
         return call_user_func($unserializerFunction, $serializedData);
     }
 
     /**
-     * Retrieves data from the cache for a given key.
+     * Retrieve a cache entry by key.
      *
-     * @param string $key The key to identify the cached data.
-     *
-     * @return mixed The cached data, or null if not found or expired.
-     * @throws InvalidArgumentException If the provided serializer is not supported.
+     * @param string $key The cache key.
+     * @throws RuntimeException If the cache file is not readable or cannot be accessed.
+     * @return mixed|null The cached data, or null if the entry is expired or does not exist.
      */
     public static function get($key)
     {
-        // Get the cache file path based on the key.
         $cacheFile = self::getCacheFile($key);
 
-        // If the cache file does not exist, return null.
         if (!file_exists($cacheFile)) {
             return null;
         }
 
-        // Read the content of the cache file.
-        $content = file_get_contents($cacheFile);
-
-        if (!$content) {
-            return false;
+        // Ensure file is readable before trying to get contents
+        if (!is_readable($cacheFile)) {
+            throw new RuntimeException("Cache file is not readable: $cacheFile");
         }
 
-        // Decode the JSON content of the cache file.
+        $content = @file_get_contents($cacheFile);
+
+        if ($content === false) {
+            throw new RuntimeException("Failed to read cache file: $cacheFile");
+        }
+
         $cacheData = json_decode($content, true);
 
-        // If the cache data is invalid, delete the cache file and return null.
         if (!is_array($cacheData)) {
             unlink($cacheFile);
             return null;
         }
 
-        // Check if the cache has expired; if so, delete the cache file and return null.
         if (time() > $cacheData['expiration']) {
             unlink($cacheFile);
             return null;
         }
 
-        // Return the deserialized cached data.
         return self::unserializeData($cacheData['data'], $cacheData['serializer']);
     }
 
     /**
-     * Invalidates a cached item by removing its corresponding file.
+     * Invalidate a cache entry by key.
      *
-     * @param string $key The key used to identify the cached data.
+     * @param string $key The cache key.
+     * @throws RuntimeException If the cache file is not writable or cannot be deleted.
+     * @return void
      */
     public static function invalidate($key)
     {
-        // Get the cache file path based on the key.
         $cacheFile = self::getCacheFile($key);
 
-        // If the cache file exists, delete it.
         if (file_exists($cacheFile)) {
-            unlink($cacheFile);
+            // Verify that the file is writable before trying to delete
+            if (!is_writable($cacheFile)) {
+                throw new RuntimeException("Cache file is not writable: $cacheFile");
+            }
+
+            if (!unlink($cacheFile)) {
+                throw new RuntimeException("Failed to delete cache file: $cacheFile");
+            }
         }
     }
 
     /**
-     * Retrieves data from the cache or executes a callback to fetch and cache the data if not found.
+     * Retrieve a cache entry or store the result of a callback if not found.
      *
-     * @param string $key The key used to identify the cached data.
-     * @param callable $callback The callback function to fetch the data if it is not found in the cache.
-     * @param int $expiration (optional) The number of seconds the data should remain cached. Defaults to 3600 (1 hour).
-     * @param string $serializer (optional) The serializer to use for storing the data. Defaults to 'json'.
-     *
-     * @return mixed The cached data, or the data fetched by the callback if not found in the cache.
+     * @param string $key The cache key.
+     * @param callable $callback A callback to generate the cache value if it doesn't exist.
+     * @param int $expiration The cache expiration time in seconds.
+     * @param string $serializer The serialization format to use.
+     * @return mixed The cached data or the result of the callback.
      */
     public static function remember($key, $callback, $expiration = 3600, $serializer = 'serialize')
     {
-        // Try to retrieve the cached data.
         $cachedData = self::get($key);
 
-        // If the cached data is not found or expired:
-        if (!$cachedData) {
-            // Execute the callback to fetch new data.
+        if ($cachedData === null) {
             $cachedData = $callback();
-
-            // Store the new data in the cache.
             self::add($key, $cachedData, $expiration, $serializer);
         }
 
-        // Return the cached (or newly fetched) data.
         return $cachedData;
     }
 }
