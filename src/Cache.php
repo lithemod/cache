@@ -153,6 +153,8 @@ class Cache
      */
     public static function get($key)
     {
+        self::ensureCacheDirExists();
+
         $cacheFile = self::getCacheFile($key);
 
         if (!file_exists($cacheFile)) {
@@ -194,6 +196,8 @@ class Cache
      */
     public static function invalidate($key)
     {
+        self::ensureCacheDirExists();
+        
         $cacheFile = self::getCacheFile($key);
 
         if (file_exists($cacheFile)) {
