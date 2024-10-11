@@ -79,7 +79,7 @@ class CacheTest extends TestCase
 
         Cache::get($key); // Attempts to retrieve data from the cache
     }
-    
+
     /**
      * Tests the remember method functionality.
      */
@@ -97,5 +97,28 @@ class CacheTest extends TestCase
         // Tests retrieval of existing cache
         $resultFromCache = Cache::get($key); // Retrieves data from the cache
         $this->assertEquals($data, $resultFromCache); // Asserts that the retrieved data matches the cached data
+    }
+
+    /**
+     * Tests cache invalidation for multiple keys using an array.
+     */
+    public function testInvalidateMultipleCacheKeys()
+    {
+        $keys = ['key1', 'key2', 'key3'];
+        $data = ['foo' => 'bar'];
+
+        // Add data to multiple cache keys
+        foreach ($keys as $key) {
+            Cache::add($key, $data, 3600, 'json');
+        }
+
+        // Invalidate multiple keys at once
+        Cache::invalidate($keys);
+
+        // Ensure all the keys have been invalidated
+        foreach ($keys as $key) {
+            $cachedData = Cache::get($key);
+            $this->assertNull($cachedData); // Asserts that each key has been invalidated
+        }
     }
 }
