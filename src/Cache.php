@@ -187,26 +187,32 @@ class Cache
     }
 
     /**
-     * Invalidate a cache entry by key.
+     * Invalidate cache entries by key or keys.
      *
-     * @param string $key The cache key.
+     * @param string|array $key The cache key(s).
      * @throws RuntimeException If the cache file is not writable or cannot be deleted.
      * @return void
      */
     public static function invalidate($key)
     {
         self::ensureCacheDirExists();
-        
-        $cacheFile = self::getCacheFile($key);
 
-        if (file_exists($cacheFile)) {
-            // Verify that the file is writable before trying to delete
-            if (!is_writable($cacheFile)) {
-                throw new RuntimeException("Cache file is not writable: $cacheFile");
-            }
+        // If it's an array, iterate over the keys
+        $keys = is_array($key) ? $key : [$key];
 
-            if (!unlink($cacheFile)) {
-                throw new RuntimeException("Failed to delete cache file: $cacheFile");
+        foreach ($keys as $singleKey) {
+            $cacheFile = self::getCacheFile($singleKey);
+
+            if (file_exists($cacheFile)) {
+                // Check if the file is writable before attempting to delete
+                if (!is_writable($cacheFile)) {
+                    throw new RuntimeException("Cache file is not writable: $cacheFile");
+                }
+
+                // Attempt to delete the cache file
+                if (!unlink($cacheFile)) {
+                    throw new RuntimeException("Failed to delete cache file: $cacheFile");
+                }
             }
         }
     }
