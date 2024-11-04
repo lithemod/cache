@@ -1,10 +1,10 @@
 # Lithe Cache 
 
-**Lithe Cache** is a simple and efficient caching module that utilizes the filesystem. With it, you can store and retrieve data quickly and easily, enhancing the performance of your application.
+**Lithe Cache** is a simple and efficient caching module that utilizes the filesystem for storage. With it, you can store and retrieve data quickly, improving the performance of your application.
 
 ## Installation
 
-To install the `lithemod/cache` module, you can use Composer. Run the following command in the root directory of your project:
+To install the `lithemod/cache` module, use Composer. Run the following command in the root directory of your project:
 
 ```bash
 composer require lithemod/cache
@@ -49,21 +49,39 @@ if ($data === null) {
 }
 ```
 
-### 4. Invalidating Cache Data
+### 4. Checking for Data Existence in Cache
 
-If you need to remove data from the cache, use the `invalidate` method. You can now invalidate a single key or an array of keys!
+To check if a cache entry exists and is valid, you can use the `has` method, which now accepts both a single key and an array of keys:
 
 ```php
-// Invalidate cached data
-Cache::invalidate('my_data'); // For a single key
+// Check if a single key exists
+if (Cache::has('my_data')) {
+    echo "Data is in cache.";
+}
+
+// Check multiple keys
+if (Cache::has(['key1', 'key2'])) {
+    echo "All keys are in cache.";
+} else {
+    echo "One or more keys were not found or are expired.";
+}
+```
+
+### 5. Invalidating Cache Data
+
+If you need to remove data from the cache, use the `invalidate` method. You can now invalidate a single key or an array of keys:
+
+```php
+// Invalidate a single cache key
+Cache::invalidate('my_data');
 
 // Invalidate multiple keys
 Cache::invalidate(['key1', 'key2', 'key3']);
 ```
 
-### 5. Using `remember`
+### 6. Using `remember`
 
-You can also use the `remember` method to cache data or execute a callback to fetch fresh data if not found in the cache:
+The `remember` method allows you to retrieve data from the cache or execute a callback to fetch fresh data if not found in the cache:
 
 ```php
 $data = Cache::remember('my_key', function () {
@@ -79,10 +97,16 @@ print_r($data);
 - **`Cache::dir($dir)`**: Sets the cache directory.
 - **`Cache::add($key, $data, $expiration, $serializer)`**: Stores data in the cache.
 - **`Cache::get($key)`**: Retrieves data from the cache.
-- **`Cache::invalidate($key)`**: Removes data from the cache.
+- **`Cache::has($key)`**: Checks if a single or multiple cache entries exist.
+- **`Cache::invalidate($key)`**: Removes specific data from the cache.
 - **`Cache::invalidate(array $keys)`**: Removes multiple cache keys.
-- **`Cache::remember($key, $callback, $expiration, $serializer)`**: Retrieves data from the cache or executes a callback to fetch and store fresh data.
+- **`Cache::clear()`**: Clears all cached data.
+- **`Cache::remember($key, $callback, $expiration, $serializer)`**: Retrieves data from the cache or executes a callback to fetch and store new data.
 
 ## Final Considerations
 
-Make sure the cache directory has appropriate write permissions to avoid access issues. This module provides a simple solution for caching and can be used in various PHP applications, delivering improved performance and a smoother user experience.
+- **Permissions**: Ensure that the cache directory has appropriate write permissions to avoid access issues.
+- **Serialization Methods**: `Lithe Cache` supports both `serialize` and `json` for serializing data before storing it. Choose the method that fits your application's needs.
+- **Directory Structure**: `Lithe Cache` organizes cache files into subdirectories to facilitate searching and improve performance in large directories.
+
+With `Lithe Cache`, you have a lightweight and easy-to-use solution for caching that can be integrated into various PHP applications, providing improved performance and a smoother user experience.

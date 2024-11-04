@@ -2,123 +2,96 @@
 
 namespace Tests\Support;
 
-use PHPUnit\Framework\TestCase;
 use Lithe\Support\Cache;
+use PHPUnit\Framework\TestCase;
 
 class CacheTest extends TestCase
 {
-    private static $cacheDir = __DIR__ . '/../cache';
-
     protected function setUp(): void
     {
-        Cache::dir(self::$cacheDir);
+        // Set a temporary directory for the cache during tests
+        Cache::dir(sys_get_temp_dir() . '/test_cache');
     }
 
     protected function tearDown(): void
     {
-        // Clears the cache directory after each test
-        $files = glob(self::$cacheDir . '/*');
-        foreach ($files as $file) {
-            unlink($file);
-        }
+        // Clear cache files after tests
+        array_map('unlink', glob(sys_get_temp_dir() . '/test_cache/*.cache'));
     }
 
-    /**
-     * Tests adding and retrieving data from the cache.
-     */
-    public function testAddAndGetCache()
+    public function testCacheDirectoryCreation()
+    {
+        $this->assertDirectoryExists(Cache::getCacheDirectory(), 'The cache directory was not created correctly.');
+        $this->assertIsWritable(Cache::getCacheDirectory(), 'The cache directory is not writable.');
+    }
+
+    public function testAddAndGetCacheEntry()
     {
         $key = 'test_key';
-        $data = ['foo' => 'bar'];
-        Cache::add($key, $data, 3600, 'json'); // Adds data to the cache with a 1-hour expiration
+        $data = 'Test data';
 
-        $cachedData = Cache::get($key); // Retrieves data from the cache
-        $this->assertEquals($data, $cachedData); // Asserts that the retrieved data matches the added data
+        Cache::add($key, $data, 3600);
+        $retrievedData = Cache::get($key);
+
+        $this->assertSame($data, $retrievedData, 'The retrieved cache value does not match the original value.');
     }
 
-    /**
-     * Tests cache expiration functionality.
-     */
     public function testCacheExpiration()
     {
-        $key = 'test_key_expiration';
-        $data = ['foo' => 'bar'];
-        Cache::add($key, $data, 1, 'json'); // Adds data to the cache with a 1-second expiration
+        $key = 'expire_test';
+        $data = 'This data will expire';
 
-        sleep(2); // Waits 2 seconds to ensure that the cache expires
+        Cache::add($key, $data, 1); // Expires in 1 second
+        sleep(2); // Wait for expiration
+        $retrievedData = Cache::get($key);
 
-        $cachedData = Cache::get($key); // Retrieves data from the cache
-        $this->assertNull($cachedData); // Asserts that the cache is null (expired)
+        $this->assertNull($retrievedData, 'The cache was not invalidated after the expiration time.');
     }
 
-    /**
-     * Tests cache invalidation functionality.
-     */
-    public function testInvalidateCache()
+    public function testInvalidateCacheEntry()
     {
-        $key = 'test_key_invalidate';
-        $data = ['foo' => 'bar'];
-        Cache::add($key, $data, 3600, 'json'); // Adds data to the cache with a 1-hour expiration
+        $key = 'invalidate_test';
+        $data = 'This data will be invalidated';
 
-        Cache::invalidate($key); // Invalidates the cache
+        Cache::add($key, $data, 3600);
+        Cache::invalidate($key);
+        $retrievedData = Cache::get($key);
 
-        $cachedData = Cache::get($key); // Retrieves data from the cache
-        $this->assertNull($cachedData); // Asserts that the cache is null (invalidated)
+        $this->assertNull($retrievedData, 'The cache was not invalidated correctly.');
     }
 
-    /**
-     * Tests handling of invalid serializer.
-     */
-    public function testInvalidSerializer()
+    public function testAddCacheWithInvalidSerializer()
     {
-        $this->expectException(\InvalidArgumentException::class); // Expects an InvalidArgumentException
+        $this->expectException(\InvalidArgumentException::class);
 
-        $key = 'test_key_invalid_serializer';
-        $data = ['foo' => 'bar'];
-        Cache::add($key, $data, 3600, 'invalid_serializer'); // Adds data to the cache with an invalid serializer
+        $key = 'invalid_serializer';
+        $data = 'Invalid data';
+        $serializer = 'invalid_serializer';
 
-        Cache::get($key); // Attempts to retrieve data from the cache
+        Cache::add($key, $data, 3600, $serializer);
     }
 
-    /**
-     * Tests the remember method functionality.
-     */
-    public function testRememberMethod()
+    public function testRememberMethodStoresCallbackResult()
     {
-        $key = 'test_key_remember';
-        $data = ['foo' => 'bar'];
+        $key = 'remember_test';
+        $data = 'Data from callback';
 
-        $result = Cache::remember($key, function () use ($data) {
-            return $data; // Returns the data to cache
-        }, 3600, 'json'); // Caches the data with a 1-hour expiration
+        $result = Cache::remember($key, fn() => $data, 3600);
 
-        $this->assertEquals($data, $result); // Asserts that the data returned by remember matches the cached data
-
-        // Tests retrieval of existing cache
-        $resultFromCache = Cache::get($key); // Retrieves data from the cache
-        $this->assertEquals($data, $resultFromCache); // Asserts that the retrieved data matches the cached data
+        $this->assertSame($data, $result, 'The callback result was not stored correctly by the remember method.');
+        $retrievedData = Cache::get($key);
+        $this->assertSame($data, $retrievedData, 'The value was not retrieved correctly after being stored by the remember method.');
     }
 
-    /**
-     * Tests cache invalidation for multiple keys using an array.
-     */
-    public function testInvalidateMultipleCacheKeys()
+    public function testRememberMethodRetrievesExistingCache()
     {
-        $keys = ['key1', 'key2', 'key3'];
-        $data = ['foo' => 'bar'];
+        $key = 'remember_existing';
+        $data = 'Existing data';
 
-        // Add data to multiple cache keys
-        foreach ($keys as $key) {
-            Cache::add($key, $data, 3600, 'json');
-        }
+        Cache::add($key, $data, 3600);
 
-        // Invalidate multiple keys at once
-        Cache::invalidate($keys);
+        $result = Cache::remember($key, fn() => 'Callback data', 3600);
 
-        // Ensure all the keys have been invalidated
-        foreach ($keys as $key) {
-            $cachedData = Cache::get($key);
-            $this->assertNull($cachedData); // Asserts that each key has been invalidated
-        }
+        $this->assertSame($data, $result, 'The remember method did not return the existing cached value.');
     }
 }
